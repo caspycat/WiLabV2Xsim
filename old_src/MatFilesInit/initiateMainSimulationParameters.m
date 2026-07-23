@@ -226,6 +226,8 @@ switch simParams.typeOfScenario
             fileCfg,varargin{1});
 end
 
+[simParams,varargin] = initiatePositionErrorChain( ...
+    simParams,fileCfg,varargin{1});
 
 % [neighborsSelection]
 % Choose whether to use significant neighbors selection

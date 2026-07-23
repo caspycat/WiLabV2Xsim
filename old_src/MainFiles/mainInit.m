@@ -197,9 +197,20 @@ else
     positionManagement.NgroupPosUpdate = -1;
 end
 
-% Copy real coordinates into estimated coordinates at eNodeB (no positioning error)
-simValues.XvehicleEstimated = positionManagement.XvehicleReal;
-simValues.YvehicleEstimated = positionManagement.YvehicleReal;
+% initVehiclePositions initializes both the legacy pre-module estimate and
+% the final controller-visible position-error chain output.
+if ~isfield(simValues,'XvehicleEstimatedLegacy')
+    simValues.XvehicleEstimatedLegacy = ...
+        positionManagement.XvehicleReal;
+    simValues.YvehicleEstimatedLegacy = ...
+        positionManagement.YvehicleReal;
+end
+if ~isfield(simValues,'XvehicleEstimated')
+    simValues.XvehicleEstimated = ...
+        simValues.XvehicleEstimatedLegacy;
+    simValues.YvehicleEstimated = ...
+        simValues.YvehicleEstimatedLegacy;
+end
 
 % Call function to compute distances
 % computeDistance(i,j): computeDistance from vehicle with index i to vehicle with index j
