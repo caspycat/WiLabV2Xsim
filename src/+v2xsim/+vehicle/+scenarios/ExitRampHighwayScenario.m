@@ -15,6 +15,7 @@ classdef ExitRampHighwayScenario < ...
     properties (Dependent, SetAccess = private)
         ExitProbability
         MergeDistance
+        VehicleRouteStates
     end
 
     methods
@@ -82,6 +83,11 @@ classdef ExitRampHighwayScenario < ...
 
         function value = get.MergeDistance(obj)
             value = obj.Geometry.MergeDistance;
+        end
+
+        function value = get.VehicleRouteStates(obj)
+            routes = obj.MobilityModel.VehicleRoutes;
+            value = routes(:, ["TravelDirection", "Route"]);
         end
     end
 end

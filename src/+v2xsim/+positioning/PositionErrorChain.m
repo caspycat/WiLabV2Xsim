@@ -1,8 +1,8 @@
 classdef PositionErrorChain < v2xsim.positioning.PositionErrorModule
     %POSITIONERRORCHAIN Applies position error modules in a fixed order.
     %   Modules are applied from left to right. Each module receives the
-    %   output of the preceding module and the same current simulation
-    %   time. An empty chain leaves positions unchanged.
+    %   apparent output of the preceding module and the same immutable
+    %   context. An empty chain leaves positions unchanged.
 
     properties (SetAccess = private)
         Modules (1, :) cell = cell(1, 0)
@@ -34,13 +34,13 @@ classdef PositionErrorChain < v2xsim.positioning.PositionErrorModule
 
     methods (Access = protected)
         function [obj, outputPositions] = doApply( ...
-                obj, inputPositions, simulationTimeSeconds)
+                obj, inputPositions, context)
             outputPositions = inputPositions;
 
             for moduleIndex = 1:numel(obj.Modules)
                 module = obj.Modules{moduleIndex};
                 [module, outputPositions] = module.apply( ...
-                    outputPositions, simulationTimeSeconds);
+                    outputPositions, context);
                 obj.Modules{moduleIndex} = module;
             end
         end

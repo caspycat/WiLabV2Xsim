@@ -1,10 +1,9 @@
 classdef (Abstract, HandleCompatible) PositionErrorModule
     %POSITIONERRORMODULE Transforms vehicle positions seen by a controller.
     %   Modules receive a table containing the planar X and Y positions in
-    %   meters. Vehicle identities are stored as table row names. The
-    %   current simulation time is supplied separately in seconds so that
-    %   implementations may be stateful, for example by retaining position
-    %   history.
+    %   meters. Vehicle identities are stored as table row names. Context
+    %   supplies timing and the unmodified scenario position snapshot.
+    %   Specialized contexts may provide additional scenario capabilities.
     %
     %   APPLY returns the updated module as well as the transformed
     %   positions. Implementations must preserve the set of vehicle
@@ -13,18 +12,20 @@ classdef (Abstract, HandleCompatible) PositionErrorModule
 
     methods (Sealed)
         function [obj, outputPositions] = apply( ...
-                obj, inputPositions, simulationTimeSeconds)
+                obj, inputPositions, context)
             %APPLY Transform one position snapshot.
             arguments (Input)
                 obj (1, 1)
                 inputPositions table ...
                     {v2xsim.positioning.validation.mustBe2DPositionTable}
-                simulationTimeSeconds (1, 1) double ...
-                    {mustBeReal, mustBeFinite, mustBeNonnegative}
+                context (1, 1) ...
+                    v2xsim.positioning.PositionErrorContext
             end
 
+            obj.validateContextVehicleIdentities( ...
+                inputPositions, context.ActualPositions);
             [obj, outputPositions] = ...
-                obj.doApply(inputPositions, simulationTimeSeconds);
+                obj.doApply(inputPositions, context);
 
             v2xsim.positioning.validation.mustBe2DPositionTable( ...
                 outputPositions);
@@ -34,6 +35,21 @@ classdef (Abstract, HandleCompatible) PositionErrorModule
     end
 
     methods (Access = private)
+        function validateContextVehicleIdentities( ...
+                ~, inputPositions, actualPositions)
+            inputVehicleIds = string( ...
+                inputPositions.Properties.RowNames);
+            actualVehicleIds = string( ...
+                actualPositions.Properties.RowNames);
+
+            if ~isequal(sort(inputVehicleIds), sort(actualVehicleIds))
+                error( ...
+                    "v2xsim:positioning:ContextVehicleSetMismatch", ...
+                    "Apparent and actual positions must identify the " + ...
+                    "same vehicles.");
+            end
+        end
+
         function validateVehicleIdentities( ...
                 ~, inputPositions, outputPositions)
             inputVehicleIds = string( ...
@@ -51,9 +67,10 @@ classdef (Abstract, HandleCompatible) PositionErrorModule
     end
 
     methods (Abstract, Access = protected)
-        % Transform inputPositions at simulationTimeSeconds. Return the
-        % updated module to support value-class implementations with state.
+        % Transform the apparent inputPositions using the immutable
+        % context. Return the updated module to support value-class
+        % implementations with state.
         [obj, outputPositions] = doApply( ...
-            obj, inputPositions, simulationTimeSeconds)
+            obj, inputPositions, context)
     end
 end

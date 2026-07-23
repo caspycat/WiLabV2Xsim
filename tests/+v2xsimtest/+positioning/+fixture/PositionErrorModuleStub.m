@@ -23,11 +23,12 @@ classdef PositionErrorModuleStub < ...
 
     methods (Access = protected)
         function [obj, outputPositions] = doApply( ...
-                obj, inputPositions, simulationTimeSeconds)
+                obj, inputPositions, context)
             obj.ApplicationCount = obj.ApplicationCount + 1;
-            obj.LastSimulationTimeSeconds = simulationTimeSeconds;
+            obj.LastSimulationTimeSeconds = ...
+                context.SimulationTimeSeconds;
             outputPositions = ...
-                obj.Transform(inputPositions, simulationTimeSeconds);
+                obj.Transform(inputPositions, context);
         end
     end
 end

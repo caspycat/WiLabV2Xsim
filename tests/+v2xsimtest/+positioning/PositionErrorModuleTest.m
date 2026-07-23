@@ -8,8 +8,9 @@ classdef PositionErrorModuleTest < matlab.unittest.TestCase
             module = ...
                 v2xsimtest.positioning.fixture.PositionErrorModuleStub( ...
                     @(value, ~) testCase.offsetPositions(value, [2, -3]));
+            context = testCase.createContext(positions, 1.25);
 
-            [module, actualPositions] = module.apply(positions, 1.25);
+            [module, actualPositions] = module.apply(positions, context);
 
             expectedPositions = testCase.offsetPositions(positions, [2, -3]);
             testCase.verifyEqual(actualPositions, expectedPositions);
@@ -19,71 +20,77 @@ classdef PositionErrorModuleTest < matlab.unittest.TestCase
 
         function testApplyRejectsInvalidInputSchema(testCase)
             positions = testCase.createPositions();
+            context = testCase.createContext(positions, 0);
             positions.Z = zeros(height(positions), 1);
             module = testCase.createIdentityModule();
 
             testCase.verifyError( ...
-                @() module.apply(positions, 0), ...
+                @() module.apply(positions, context), ...
                 "v2xsim:positioning:MustBe2DPositionTable");
         end
 
         function testApplyRejectsNonfiniteCoordinates(testCase)
             positions = testCase.createPositions();
+            context = testCase.createContext(positions, 0);
             positions.X(1) = Inf;
             module = testCase.createIdentityModule();
 
             testCase.verifyError( ...
-                @() module.apply(positions, 0), ...
+                @() module.apply(positions, context), ...
                 "v2xsim:positioning:MustBe2DPositionTable");
         end
 
         function testApplyRejectsMissingVehicleIdentities(testCase)
             positions = testCase.createPositions();
+            context = testCase.createContext(positions, 0);
             positions.Properties.RowNames = {};
             module = testCase.createIdentityModule();
 
             testCase.verifyError( ...
-                @() module.apply(positions, 0), ...
+                @() module.apply(positions, context), ...
                 "v2xsim:positioning:MustBe2DPositionTable");
         end
 
-        function testApplyRejectsNegativeSimulationTime(testCase)
+        function testContextRejectsNegativeSimulationTime(testCase)
             positions = testCase.createPositions();
-            module = testCase.createIdentityModule();
 
             testCase.verifyFunctionThrows( ...
-                @() module.apply(positions, -0.1));
+                @() v2xsim.positioning.PositionErrorContext( ...
+                    positions, -0.1, 0.1, 10));
         end
 
         function testApplyRejectsInvalidOutputSchema(testCase)
             positions = testCase.createPositions();
+            context = testCase.createContext(positions, 0);
             module = ...
                 v2xsimtest.positioning.fixture.PositionErrorModuleStub( ...
                     @(value, ~) removevars(value, "Y"));
 
             testCase.verifyError( ...
-                @() module.apply(positions, 0), ...
+                @() module.apply(positions, context), ...
                 "v2xsim:positioning:MustBe2DPositionTable");
         end
 
         function testApplyRejectsChangedVehicleSet(testCase)
             positions = testCase.createPositions();
+            context = testCase.createContext(positions, 0);
             module = ...
                 v2xsimtest.positioning.fixture.PositionErrorModuleStub( ...
                     @(value, ~) testCase.renameFirstVehicle(value));
 
             testCase.verifyError( ...
-                @() module.apply(positions, 0), ...
+                @() module.apply(positions, context), ...
                 "v2xsim:positioning:VehicleSetChanged");
         end
 
         function testApplyAllowsVehicleRowReordering(testCase)
             positions = testCase.createPositions();
+            context = testCase.createContext(positions, 0);
             module = ...
                 v2xsimtest.positioning.fixture.PositionErrorModuleStub( ...
                     @(value, ~) flipud(value));
 
-            [~, actualPositions] = module.apply(positions, 0);
+            [~, actualPositions] = module.apply(positions, context);
 
             testCase.verifyEqual(actualPositions, flipud(positions));
         end
@@ -92,11 +99,24 @@ classdef PositionErrorModuleTest < matlab.unittest.TestCase
             positions = table( ...
                 zeros(0, 1), zeros(0, 1), ...
                 VariableNames=["X", "Y"]);
+            context = testCase.createContext(positions, 0);
             module = testCase.createIdentityModule();
 
-            [~, actualPositions] = module.apply(positions, 0);
+            [~, actualPositions] = module.apply(positions, context);
 
             testCase.verifyEqual(actualPositions, positions);
+        end
+
+        function testApplyRejectsMismatchedContextVehicles(testCase)
+            positions = testCase.createPositions();
+            actualPositions = positions;
+            actualPositions.Properties.RowNames{1} = 'other-vehicle';
+            context = testCase.createContext(actualPositions, 0);
+            module = testCase.createIdentityModule();
+
+            testCase.verifyError( ...
+                @() module.apply(positions, context), ...
+                "v2xsim:positioning:ContextVehicleSetMismatch");
         end
     end
 
@@ -112,6 +132,12 @@ classdef PositionErrorModuleTest < matlab.unittest.TestCase
                 [10; 20], [30; 40], ...
                 VariableNames=["X", "Y"], ...
                 RowNames=["vehicle-1", "vehicle-2"]);
+        end
+
+        function context = createContext( ...
+                ~, actualPositions, simulationTimeSeconds)
+            context = v2xsim.positioning.PositionErrorContext( ...
+                actualPositions, simulationTimeSeconds, 0.1, 10);
         end
 
         function positions = offsetPositions(~, positions, offset)
