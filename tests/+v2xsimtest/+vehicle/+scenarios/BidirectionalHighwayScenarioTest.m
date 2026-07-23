@@ -27,6 +27,12 @@ classdef BidirectionalHighwayScenarioTest < matlab.unittest.TestCase
             testCase.verifyClass( ...
                 scenario.MobilityModel, ...
                 "v2xsim.vehicle.scenario.highway.mobility.RerollingSpeed");
+            testCase.verifyTrue(isa( ...
+                scenario, "v2xsim.vehicle.scenario.LanedScenario"));
+            testCase.verifyEqual(scenario.LaneNetwork.LaneCount, 2);
+            testCase.verifyEqual( ...
+                height(scenario.VehicleLaneStates), height(kinematics));
+            testCase.verifyLaneStateMatchesKinematics(scenario);
             testCase.verifyEqual(height(kinematics), 200);
             testCase.verifyGreaterThanOrEqual(kinematics.X, 0);
             testCase.verifyLessThanOrEqual(kinematics.X, 2000);
@@ -81,6 +87,7 @@ classdef BidirectionalHighwayScenarioTest < matlab.unittest.TestCase
                     sprintf("vY was nonzero at step %d.", stepIndex));
                 testCase.verifyGreaterThanOrEqual(kinematics.X, 0);
                 testCase.verifyLessThanOrEqual(kinematics.X, 50);
+                testCase.verifyLaneStateMatchesKinematics(scenario);
             end
         end
 
@@ -141,6 +148,20 @@ classdef BidirectionalHighwayScenarioTest < matlab.unittest.TestCase
             testCase.verifyEqual( ...
                 firstScenario.VehicleKinematics, ...
                 secondScenario.VehicleKinematics);
+        end
+    end
+
+    methods (Access = private)
+        function verifyLaneStateMatchesKinematics(testCase, scenario)
+            laneStates = scenario.VehicleLaneStates;
+            expectedPositions = scenario.LaneNetwork.evaluate( ...
+                laneStates.LaneId, laneStates.Progress);
+            actualPositions = [ ...
+                scenario.VehicleKinematics.X, ...
+                scenario.VehicleKinematics.Y];
+
+            testCase.verifyEqual( ...
+                actualPositions, expectedPositions, AbsTol=1e-10);
         end
     end
 end

@@ -28,6 +28,12 @@ classdef ExitRampHighwayScenarioTest < matlab.unittest.TestCase
                 AbsTol=1e-12);
             testCase.verifyEqual( ...
                 height(scenario.MobilityModel.VehicleRoutes), 200);
+            testCase.verifyTrue(isa( ...
+                scenario, "v2xsim.vehicle.scenario.LanedScenario"));
+            testCase.verifyEqual(scenario.LaneNetwork.LaneCount, 8);
+            testCase.verifyEqual( ...
+                height(scenario.LaneNetwork.Connections), 6);
+            testCase.verifyLaneStateMatchesKinematics(scenario);
         end
 
         function testExitOnlyVehiclesFollowRampAndRetainHomeLanes(testCase)
@@ -54,6 +60,7 @@ classdef ExitRampHighwayScenarioTest < matlab.unittest.TestCase
                 testCase.verifyFalse(any( ...
                     ismember(routes.Route, ["Merge", "Adjacent"])));
                 testCase.verifyRampRouteInvariants(scenario);
+                testCase.verifyLaneStateMatchesKinematics(scenario);
             end
         end
 
@@ -82,6 +89,7 @@ classdef ExitRampHighwayScenarioTest < matlab.unittest.TestCase
                 testCase.verifyEqual(routes.HomeLaneIndex, initialHomeLanes);
                 testCase.verifyFalse(any(routes.Route == "Ramp"));
                 testCase.verifyMergeRouteInvariants(scenario);
+                testCase.verifyLaneStateMatchesKinematics(scenario);
             end
         end
 
@@ -97,6 +105,9 @@ classdef ExitRampHighwayScenarioTest < matlab.unittest.TestCase
                     ExitProbability=0, ...
                     MergeDistance=0);
             laneCenters = scenario.Geometry.getAbsoluteLaneCenters();
+            testCase.verifyEqual(scenario.LaneNetwork.LaneCount, 6);
+            testCase.verifyEqual( ...
+                height(scenario.LaneNetwork.Connections), 4);
 
             for stepIndex = 1:5
                 routes = scenario.MobilityModel.VehicleRoutes;
@@ -106,6 +117,7 @@ classdef ExitRampHighwayScenarioTest < matlab.unittest.TestCase
                     abs(scenario.VehicleKinematics.Y), laneCenters)));
                 testCase.verifyEqual( ...
                     scenario.VehicleKinematics.vY, zeros(1000, 1));
+                testCase.verifyLaneStateMatchesKinematics(scenario);
                 scenario = scenario.step(0.5);
             end
         end
@@ -206,6 +218,18 @@ classdef ExitRampHighwayScenarioTest < matlab.unittest.TestCase
                 kinematics.Y(onMerge), expectedY, AbsTol=1e-10);
             testCase.verifyLessThanOrEqual( ...
                 direction .* kinematics.vY(onMerge), 0);
+        end
+
+        function verifyLaneStateMatchesKinematics(testCase, scenario)
+            laneStates = scenario.VehicleLaneStates;
+            expectedPositions = scenario.LaneNetwork.evaluate( ...
+                laneStates.LaneId, laneStates.Progress);
+            actualPositions = [ ...
+                scenario.VehicleKinematics.X, ...
+                scenario.VehicleKinematics.Y];
+
+            testCase.verifyEqual( ...
+                actualPositions, expectedPositions, AbsTol=1e-9);
         end
     end
 end

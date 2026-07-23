@@ -1,0 +1,126 @@
+classdef LaneNetworkTest < matlab.unittest.TestCase
+    %LANENETWORKTEST Tests named parametric-lane lookup and evaluation.
+
+    methods (Test)
+        function testEvaluatesVehiclesAcrossDifferentLanes(testCase)
+            network = testCase.createNetwork();
+            laneIds = ["horizontal"; "vertical"; "horizontal"];
+            progress = [0.25; 0.5; 1];
+
+            actualPositions = network.evaluate(laneIds, progress);
+
+            expectedPositions = [2.5, 0; 5, 10; 10, 0];
+            testCase.verifyEqual(actualPositions, expectedPositions);
+        end
+
+        function testReturnsLaneByIdentifier(testCase)
+            network = testCase.createNetwork();
+
+            lane = network.getLane("horizontal");
+
+            testCase.verifyClass( ...
+                lane, "v2xsim.vehicle.scenario.highway.ParametricLane");
+            testCase.verifyEqual(lane.WidthMeters, 3.5);
+        end
+
+        function testReportsKnownLaneIdentifiers(testCase)
+            network = testCase.createNetwork();
+
+            actual = network.hasLane( ...
+                ["horizontal", "missing", "vertical"]);
+
+            testCase.verifyEqual(actual, [true, false, true]);
+            testCase.verifyEqual(network.LaneCount, 2);
+        end
+
+        function testReturnsOutgoingConnections(testCase)
+            import v2xsim.vehicle.scenario.highway.LaneConnectionKind
+
+            horizontal = testCase.createHorizontalLane();
+            vertical = ...
+                v2xsim.vehicle.scenario.highway.ParametricLane( ...
+                    4, @(progress) [ ...
+                        5 .* ones(size(progress)), ...
+                        20 .* progress]);
+            connections = table( ...
+                "horizontal", "vertical", LaneConnectionKind.Diverge, ...
+                1, 0, ...
+                VariableNames=[ ...
+                    "FromLaneId", "ToLaneId", "Kind", ...
+                    "FromProgress", "ToProgress"]);
+            network = v2xsim.vehicle.scenario.highway.LaneNetwork( ...
+                ["horizontal", "vertical"], ...
+                {horizontal, vertical}, connections);
+
+            actual = network.getOutgoingConnections("horizontal");
+
+            testCase.verifyEqual(actual, connections);
+        end
+
+        function testRejectsDuplicateLaneIdentifiers(testCase)
+            lane = testCase.createHorizontalLane();
+            constructor = @() ...
+                v2xsim.vehicle.scenario.highway.LaneNetwork( ...
+                    ["duplicate", "duplicate"], {lane, lane});
+
+            testCase.verifyError( ...
+                constructor, ...
+                "v2xsim:scenario:highway:InvalidLaneIds");
+        end
+
+        function testRejectsUnknownLaneEvaluation(testCase)
+            network = testCase.createNetwork();
+
+            testCase.verifyError( ...
+                @() network.evaluate("missing", 0.5), ...
+                "v2xsim:scenario:highway:UnknownLane");
+        end
+
+        function testRejectsMismatchedCoordinateCounts(testCase)
+            network = testCase.createNetwork();
+
+            testCase.verifyError( ...
+                @() network.evaluate( ...
+                    ["horizontal"; "vertical"], 0.5), ...
+                "v2xsim:scenario:highway:LaneCoordinateSizeMismatch");
+        end
+
+        function testRejectsConnectionToUnknownLane(testCase)
+            import v2xsim.vehicle.scenario.highway.LaneConnectionKind
+
+            lane = testCase.createHorizontalLane();
+            connections = table( ...
+                "horizontal", "missing", LaneConnectionKind.Continuation, ...
+                1, 0, ...
+                VariableNames=[ ...
+                    "FromLaneId", "ToLaneId", "Kind", ...
+                    "FromProgress", "ToProgress"]);
+            constructor = @() ...
+                v2xsim.vehicle.scenario.highway.LaneNetwork( ...
+                    "horizontal", {lane}, connections);
+
+            testCase.verifyError( ...
+                constructor, ...
+                "v2xsim:scenario:highway:InvalidLaneConnections");
+        end
+    end
+
+    methods (Access = private)
+        function network = createNetwork(testCase)
+            horizontal = testCase.createHorizontalLane();
+            vertical = ...
+                v2xsim.vehicle.scenario.highway.ParametricLane( ...
+                    4, @(progress) [ ...
+                        5 .* ones(size(progress)), ...
+                        20 .* progress]);
+            network = v2xsim.vehicle.scenario.highway.LaneNetwork( ...
+                ["horizontal", "vertical"], {horizontal, vertical});
+        end
+
+        function lane = createHorizontalLane(~)
+            lane = v2xsim.vehicle.scenario.highway.ParametricLane( ...
+                3.5, @(progress) [ ...
+                    10 .* progress, zeros(size(progress))]);
+        end
+    end
+end
