@@ -1,0 +1,283 @@
+function [simParams,varargin] = initiateMainSimulationParameters(fileCfg,varargin)
+% function simParams = initiateMainSimulationParameters(fileCfg,varargin)
+%
+% Main settings of the simulation
+% It takes in input the name of the (possible) file config and the inputs
+% of the main function
+% It returns the structure "simParams"
+
+fprintf('Simulation settings\n');
+% [CheckVersion]
+% check if the simulation tasks are running on the right simulator verion
+[simParams,varargin] = addNewParam([],'CheckVersion',constants.SIM_VERSION,'Simulator version needed','string',fileCfg,varargin{1});
+if simParams.CheckVersion ~= constants.SIM_VERSION
+    error('You are using a wrong version!');
+end
+
+% [seed]
+% Seed for the random numbers generation
+% If seed = 0, the seed is randomly selected (the selected value is saved
+% in the main output file)
+[simParams,varargin] = addNewParam([],'seed',0,'Seed for random numbers','integer',fileCfg,varargin{1});
+if simParams.seed == 0
+    simParams.seed = getseed();
+    fprintf('Seed used in the simulation: %d\n',simParams.seed);
+end
+rng(simParams.seed);
+
+% [simulationTime]
+% Duration of the simulation in seconds
+[simParams,varargin] = addNewParam(simParams,'simulationTime',10,'Simulation duration (s)','double',fileCfg,varargin{1});
+if simParams.simulationTime<=0
+    error('Error: "simParams.simulationTime" cannot be <= 0');
+end
+
+% [Technology]
+% Choose if simulate C-V2X (lte or 5G) or 802.11p
+% String: "CV2V" or "80211p"
+[simParams,varargin] = addNewParam(simParams,'Technology','LTE-V2X','Choose radio access technology to simulate: "LTE-V2X", "80211p", "COEX-NO-INTERF", "COEX-STD-INTERF", "NR-V2X"/"5G-V2X", "COEX-STD-INTERF-5G"','string',fileCfg,varargin{1});
+% Check that the string is correct
+switch upper(simParams.Technology)
+    case 'LTE-V2X'
+        simParams.technology = constants.TECH_ONLY_CV2X; % CV2X
+        simParams.mode5G = constants.MODE_LTE; % LTE
+        simParams.stringCV2X = 'LTE';
+    case '80211P'
+        simParams.technology = constants.TECH_ONLY_11P; % 11p
+    case 'COEX-NO-INTERF'
+        simParams.technology = constants.TECH_COEX_NO_INTERF; % LTE+11p, not interfering to each other
+        simParams.mode5G = constants.MODE_LTE; % LTE
+        simParams.stringCV2X = 'LTE';
+    case 'COEX-STD-INTERF'
+        simParams.technology = constants.TECH_COEX_STD_INTERF; % LTE+11p, interfering with standard protocols
+        simParams.mode5G = constants.MODE_LTE; % LTE
+        simParams.stringCV2X = 'LTE';
+    case {'5G-V2X', 'NR-V2X'}
+        simParams.technology = constants.TECH_ONLY_CV2X; % CV2X
+        simParams.mode5G = constants.MODE_5G; % 5G
+        simParams.stringCV2X = '5G';
+    case 'COEX-STD-INTERF-5G'
+        simParams.technology = constants.TECH_COEX_STD_INTERF; % LTE+5G NR V2X, interfering with standard protocols
+        simParams.mode5G = constants.MODE_5G; % 5G
+        simParams.stringCV2X = '5G';
+    otherwise
+        error('"simParams.Technology" must be ["LTE-V2X", "80211p", "COEX-NO-INTERF", "COEX-STD-INTERF", ["NR-V2X","5G-V2X"], "COEX-STD-INTERF-5G]');
+end
+
+% In coexistence case, set the proportion of 802.11p and C-V2X
+if ~ismember(simParams.technology, [constants.TECH_ONLY_CV2X, constants.TECH_ONLY_11P]) % if coexistence
+    % [numVehiclesLTE]
+    [simParams,varargin] = addNewParam(simParams,'numVehiclesLTE',1,'How many consecutive vehicles use LTE-V2X','integer',fileCfg,varargin{1});
+    if simParams.numVehiclesLTE<0
+        error('Error: "simParams.numVehiclesLTE" must be equal or greater than 0');
+    end
+    % [numVehicles11p]
+    [simParams,varargin] = addNewParam(simParams,'numVehicles11p',1,'How many consecutive vehicles use IEEE 802.11p','integer',fileCfg,varargin{1});
+    if simParams.numVehicles11p<0
+        error('Error: "simParams.numVehicles11p" must be equal or greater than 0');
+    end
+    if simParams.numVehiclesLTE==0 && simParams.numVehicles11p==0
+        error('Error: "simParams.numVehiclesLTE" and "simParams.numVehicles11p" cannot be both 0');
+    end
+end
+
+%% Parameters for coexistence
+% [coexMethod]
+if simParams.technology==constants.TECH_COEX_STD_INTERF % if coexistence with reciprocal interference
+    [simParams,varargin] = initiateCoexistenceParameters(simParams,fileCfg,varargin{1});
+end
+
+%% [typeOfScenario]
+% Concrete Scenario subclass selected by its class name.
+[simParams,varargin] = addNewParam( ...
+    simParams,'typeOfScenario','BidirectionalHighwayScenario', ...
+    'Scenario class name','string',fileCfg,varargin{1});
+switch lower(string(simParams.typeOfScenario))
+    case {"brownianmotionscenario", ...
+            "v2xsim.vehicle.scenarios.brownianmotionscenario"}
+        simParams.typeOfScenario = 'BrownianMotionScenario';
+    case {"bidirectionalhighwayscenario", ...
+            "v2xsim.vehicle.scenarios.bidirectionalhighwayscenario"}
+        simParams.typeOfScenario = 'BidirectionalHighwayScenario';
+    case {"etsihighwayscenario", ...
+            "v2xsim.vehicle.scenarios.etsihighwayscenario"}
+        simParams.typeOfScenario = 'EtsiHighwayScenario';
+    case {"exitramphighwayscenario", ...
+            "v2xsim.vehicle.scenarios.exitramphighwayscenario"}
+        simParams.typeOfScenario = 'ExitRampHighwayScenario';
+    otherwise
+        error( ...
+            'v2xsim:legacy:UnknownScenario', ...
+            ['"simParams.typeOfScenario" must name one of: ', ...
+            'BrownianMotionScenario, BidirectionalHighwayScenario, ', ...
+            'EtsiHighwayScenario, or ExitRampHighwayScenario.']);
+end
+
+% [positionTimeResolution]
+% Time resolution for the positioning update of the vehicles in the trace file (s)
+[simParams,varargin] = addNewParam(simParams,'positionTimeResolution',0.1,'Time resolution for the positioning update of the vehicles in the trace file (s)','double',fileCfg,varargin{1});
+if simParams.positionTimeResolution<=0
+    error('Error: "simParams.positionTimeResolution" cannot be <= 0');
+end
+
+simParams.fileObstaclesMap = false;
+% Required positional constructor inputs are stored beside the name-value
+% options so the compatibility layer has all scenario initialization data.
+% RandomStream is intentionally omitted: [seed] configures the global
+% stream used by each scenario's default RandomStream option.
+switch simParams.typeOfScenario
+    case 'BrownianMotionScenario'
+        [simParams,varargin] = addNewParam( ...
+            simParams,'scenarioOptions.VehicleCount',100, ...
+            'Number of vehicles','integer',fileCfg,varargin{1});
+        [simParams,varargin] = addNewParam( ...
+            simParams,'scenarioOptions.SimulationAreaSize',1000, ...
+            'Square simulation area side length (m)','double', ...
+            fileCfg,varargin{1});
+        [simParams,varargin] = addNewParam( ...
+            simParams,'scenarioOptions.MeanVehicleSpeed',50, ...
+            'Mean vehicle speed (m/s)','double',fileCfg,varargin{1});
+        [simParams,varargin] = addNewParam( ...
+            simParams, ...
+            'scenarioOptions.VehicleSpeedStandardDeviation',10, ...
+            'Vehicle speed standard deviation (m/s)','double', ...
+            fileCfg,varargin{1});
+
+    case 'BidirectionalHighwayScenario'
+        [simParams,varargin] = addNewParam( ...
+            simParams,'scenarioOptions.VehicleCount',100, ...
+            'Number of vehicles','integer',fileCfg,varargin{1});
+        [simParams,varargin] = addNewParam( ...
+            simParams,'scenarioOptions.NLanes',1, ...
+            'Number of lanes per direction','integer',fileCfg,varargin{1});
+        [simParams,varargin] = addNewParam( ...
+            simParams,'scenarioOptions.LaneWidth',2.5, ...
+            'Lane width (m)','double',fileCfg,varargin{1});
+        [simParams,varargin] = addNewParam( ...
+            simParams,'scenarioOptions.RoadLength',2000, ...
+            'Road length (m)','double',fileCfg,varargin{1});
+        [simParams,varargin] = addNewParam( ...
+            simParams,'scenarioOptions.CentralDividerWidth',0, ...
+            'Central divider width (m)','double',fileCfg,varargin{1});
+        [simParams,varargin] = addNewParam( ...
+            simParams,'scenarioOptions.MeanVehicleSpeed',80, ...
+            'Mean vehicle speed (m/s)','double',fileCfg,varargin{1});
+        [simParams,varargin] = addNewParam( ...
+            simParams, ...
+            'scenarioOptions.VehicleSpeedStandardDeviation',10, ...
+            'Vehicle speed standard deviation (m/s)','double', ...
+            fileCfg,varargin{1});
+        [simParams,varargin] = addNewParam( ...
+            simParams,'scenarioOptions.RerollSpeedOnWrapAround',true, ...
+            'Reroll speed after wraparound','bool',fileCfg,varargin{1});
+
+    case 'EtsiHighwayScenario'
+        [simParams,varargin] = addNewParam( ...
+            simParams,'scenarioOptions.TrafficModel', ...
+            'HighSpeedLowDensity','ETSI traffic model','string', ...
+            fileCfg,varargin{1});
+        simParams.scenarioOptions.TrafficModel = ...
+            parseEtsiTrafficModel( ...
+                simParams.scenarioOptions.TrafficModel);
+        [simParams,varargin] = addNewParam( ...
+            simParams,'scenarioOptions.Placement','Uniform', ...
+            'ETSI longitudinal placement model','string', ...
+            fileCfg,varargin{1});
+        simParams.scenarioOptions.Placement = ...
+            parseEtsiPlacement(simParams.scenarioOptions.Placement);
+        [simParams,varargin] = addNewParam( ...
+            simParams,'scenarioOptions.MinimumRoadLength',2000, ...
+            'Minimum road length (m)','double',fileCfg,varargin{1});
+
+    case 'ExitRampHighwayScenario'
+        [simParams,varargin] = addNewParam( ...
+            simParams,'scenarioOptions.VehicleCount',100, ...
+            'Number of vehicles','integer',fileCfg,varargin{1});
+        [simParams,varargin] = addNewParam( ...
+            simParams,'scenarioOptions.NLanes',2, ...
+            'Number of lanes per direction','integer',fileCfg,varargin{1});
+        [simParams,varargin] = addNewParam( ...
+            simParams,'scenarioOptions.LaneWidth',2.5, ...
+            'Lane width (m)','double',fileCfg,varargin{1});
+        [simParams,varargin] = addNewParam( ...
+            simParams,'scenarioOptions.RoadLength',2000, ...
+            'Road length (m)','double',fileCfg,varargin{1});
+        [simParams,varargin] = addNewParam( ...
+            simParams,'scenarioOptions.CentralDividerWidth',0, ...
+            'Central divider width (m)','double',fileCfg,varargin{1});
+        [simParams,varargin] = addNewParam( ...
+            simParams,'scenarioOptions.MeanVehicleSpeed',80, ...
+            'Mean vehicle speed (m/s)','double',fileCfg,varargin{1});
+        [simParams,varargin] = addNewParam( ...
+            simParams, ...
+            'scenarioOptions.VehicleSpeedStandardDeviation',10, ...
+            'Vehicle speed standard deviation (m/s)','double', ...
+            fileCfg,varargin{1});
+        [simParams,varargin] = addNewParam( ...
+            simParams,'scenarioOptions.RerollSpeedOnWrapAround',true, ...
+            'Reroll speed after wraparound','bool',fileCfg,varargin{1});
+        [simParams,varargin] = addNewParam( ...
+            simParams,'scenarioOptions.ExitProbability',0.5, ...
+            'Probability of taking the exit ramp','double', ...
+            fileCfg,varargin{1});
+        [simParams,varargin] = addNewParam( ...
+            simParams,'scenarioOptions.MergeDistance',100, ...
+            'Longitudinal merge distance (m)','double', ...
+            fileCfg,varargin{1});
+end
+
+
+% [neighborsSelection]
+% Choose whether to use significant neighbors selection
+[simParams,varargin] = addNewParam(simParams,'neighborsSelection',false,'If using significant neighbors selection','bool',fileCfg,varargin{1});
+if simParams.neighborsSelection~=false && simParams.neighborsSelection~=true
+    error('Error: "simParams.neighborsSelection" must be equal to false or true');
+end
+
+if simParams.neighborsSelection
+    error('This version of the simulator has not been tested with "neighborsSelection"');
+    % [Mvicinity]
+    % Margin for trajectory vicinity (m)
+    %[simParams,varargin] = addNewParam(simParams,'Mvicinity',10,'Margin for trajectory vicinity (m)','integer',fileCfg,varargin{1});
+    %if simParams.Mvicinity < 0
+    %    error('Error: "simParams.Mvicinity" cannot be negative.');
+    %end
+end
+
+fprintf('\n');
+
+end
+
+function trafficModel = parseEtsiTrafficModel(configuredValue)
+import v2xsim.vehicle.scenarios.etsihighway.TrafficModel
+
+switch lower(string(configuredValue))
+    case "highspeedlowdensity"
+        trafficModel = TrafficModel.HighSpeedLowDensity;
+    case "mediumspeedmediumdensity"
+        trafficModel = TrafficModel.MediumSpeedMediumDensity;
+    case "lowspeedhighdensity"
+        trafficModel = TrafficModel.LowSpeedHighDensity;
+    otherwise
+        error( ...
+            'v2xsim:legacy:UnknownEtsiTrafficModel', ...
+            ['[scenarioOptions.TrafficModel] must be ', ...
+            'HighSpeedLowDensity, MediumSpeedMediumDensity, or ', ...
+            'LowSpeedHighDensity.']);
+end
+end
+
+function placement = parseEtsiPlacement(configuredValue)
+import v2xsim.vehicle.scenarios.etsihighway.Placement
+
+switch lower(string(configuredValue))
+    case "uniform"
+        placement = Placement.Uniform;
+    case "gaussian"
+        placement = Placement.Gaussian;
+    otherwise
+        error( ...
+            'v2xsim:legacy:UnknownEtsiPlacement', ...
+            '[scenarioOptions.Placement] must be Uniform or Gaussian.');
+end
+end

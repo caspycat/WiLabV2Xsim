@@ -102,20 +102,9 @@ outputValues = struct('computationTime',-1,...
 % Load scenario from Trace File or generate initial positions of vehicles
 [simParams,simValues,positionManagement,appParams] = initVehiclePositions(simParams,appParams);
 
-% Load obstacles scenario from Obstacles Map File (if selected)
-if simParams.typeOfScenario==constants.SCENARIO_TRACE && simParams.fileObstaclesMap % Only with traffic traces
-    [simParams,positionManagement] = loadObstaclesMapFile(simParams,positionManagement);
-else
-    [positionManagement.XminMap,positionManagement.YmaxMap,positionManagement.StepMap,positionManagement.GridMap] = deal(-1);
-end
-
-% Initialization of matrices correctlyReceivedMap and neighborsMap (for PRRmap)
-if simParams.typeOfScenario==constants.SCENARIO_TRACE && outParams.printPRRmap % Only traffic traces
-    simValues.correctlyReceivedMap11p = zeros(size(positionManagement.GridMap));
-    simValues.neighborsMap11p = zeros(size(positionManagement.GridMap));
-    simValues.correctlyReceivedMapCV2X = zeros(size(positionManagement.GridMap));
-    simValues.neighborsMapCV2X = zeros(size(positionManagement.GridMap));
-end
+% Obstacle maps and PRR maps belonged to the removed trace scenarios.
+[positionManagement.XminMap,positionManagement.YmaxMap, ...
+    positionManagement.StepMap,positionManagement.GridMap] = deal(-1);
 
 if outParams.printUpdateDelay
     % Initialize matrix containing update time of the received beacons
@@ -358,11 +347,6 @@ if outParams.printPacketReceptionRatio
     %if simParams.technology~=1 % 11p or coexistence, not LTE
         printPacketReceptionRatio('11p',outputValues.distanceDetailsCounter11p,outParams,appParams,simParams,phyParams);
     end
-end
-
-% Print PRRmap to file (if enabled)
-if simParams.typeOfScenario==constants.SCENARIO_TRACE && outParams.printPRRmap && simParams.fileObstaclesMap
-    printPRRmapToFile(simValues,simParams,outParams,positionManagement);
 end
 
 % Print power control allocation to file (if enabled)

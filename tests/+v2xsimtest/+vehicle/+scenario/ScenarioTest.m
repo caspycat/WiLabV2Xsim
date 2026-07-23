@@ -1,0 +1,184 @@
+classdef ScenarioTest < matlab.unittest.TestCase
+    %SCENARIOTEST Tests the Scenario ABC through a concrete test double.
+
+    methods (Test)
+        function testConstructorAcceptsNamedKinematics(testCase)
+            initialKinematics = testCase.createKinematics( ...
+                ["vehicle-1", "vehicle-2"], 0);
+            transitions = testCase.createUnchangedTransitions( ...
+                ["vehicle-1", "vehicle-2"]);
+
+            scenario = v2xsimtest.vehicle.scenario.fixture.ScenarioStub( ...
+                initialKinematics, initialKinematics, transitions);
+
+            testCase.verifyEqual( ...
+                scenario.VehicleKinematics, initialKinematics);
+        end
+
+        function testConstructorRejectsMissingRowNames(testCase)
+            initialKinematics = testCase.createKinematics( ...
+                ["vehicle-1", "vehicle-2"], 0);
+            initialKinematics.Properties.RowNames = {};
+            transitions = testCase.createUnchangedTransitions( ...
+                ["vehicle-1", "vehicle-2"]);
+
+            constructor = @() ...
+                v2xsimtest.vehicle.scenario.fixture.ScenarioStub( ...
+                    initialKinematics, initialKinematics, transitions);
+
+            testCase.verifyError(constructor, ...
+                "v2xsim:scenario:MissingVehicleRowNames");
+        end
+
+        function testStepCommitsKinematicsAndReturnsTransitions(testCase)
+            initialKinematics = testCase.createKinematics( ...
+                ["vehicle-1", "vehicle-2"], 0);
+            nextKinematics = testCase.createKinematics( ...
+                ["vehicle-1", "vehicle-2"], 10);
+            transitions = testCase.createUnchangedTransitions( ...
+                ["vehicle-1", "vehicle-2"]);
+            scenario = v2xsimtest.vehicle.scenario.fixture.ScenarioStub( ...
+                initialKinematics, nextKinematics, transitions);
+
+            [scenario, actualTransitions] = scenario.step(0.5);
+
+            testCase.verifyEqual( ...
+                scenario.VehicleKinematics, nextKinematics);
+            testCase.verifyEqual(actualTransitions, transitions);
+            testCase.verifyEqual(scenario.LastDeltaTime, 0.5);
+        end
+
+        function testStepAllowsRowReordering(testCase)
+            initialKinematics = testCase.createKinematics( ...
+                ["vehicle-1", "vehicle-2"], 0);
+            nextKinematics = testCase.createKinematics( ...
+                ["vehicle-2", "vehicle-1"], 10);
+            transitions = testCase.createUnchangedTransitions( ...
+                ["vehicle-1", "vehicle-2"]);
+            scenario = v2xsimtest.vehicle.scenario.fixture.ScenarioStub( ...
+                initialKinematics, nextKinematics, transitions);
+
+            scenario = scenario.step(1);
+
+            testCase.verifyEqual( ...
+                scenario.VehicleKinematics, nextKinematics);
+        end
+
+        function testStepRejectsChangedVehicleSet(testCase)
+            initialKinematics = testCase.createKinematics( ...
+                ["vehicle-1", "vehicle-2"], 0);
+            nextKinematics = testCase.createKinematics( ...
+                ["vehicle-2", "vehicle-3"], 10);
+            transitions = testCase.createUnchangedTransitions( ...
+                ["vehicle-2", "vehicle-3"]);
+            scenario = v2xsimtest.vehicle.scenario.fixture.ScenarioStub( ...
+                initialKinematics, nextKinematics, transitions);
+
+            testCase.verifyError(@() scenario.step(1), ...
+                "v2xsim:scenario:VehicleSetChanged");
+        end
+
+        function testStepRejectsMismatchedTransitionRows(testCase)
+            initialKinematics = testCase.createKinematics( ...
+                ["vehicle-1", "vehicle-2"], 0);
+            nextKinematics = testCase.createKinematics( ...
+                ["vehicle-1", "vehicle-2"], 10);
+            transitions = testCase.createUnchangedTransitions( ...
+                ["vehicle-1", "vehicle-3"]);
+            scenario = v2xsimtest.vehicle.scenario.fixture.ScenarioStub( ...
+                initialKinematics, nextKinematics, transitions);
+
+            testCase.verifyError(@() scenario.step(1), ...
+                "v2xsim:scenario:LifecycleTransitionSetMismatch");
+        end
+
+        function testStaticScenarioRejectsEnteredVehicle(testCase)
+            import v2xsim.vehicle.scenario.VehicleLifecycleTransition
+
+            rowNames = ["vehicle-1", "vehicle-2"];
+            initialKinematics = testCase.createKinematics(rowNames, 0);
+            nextKinematics = testCase.createKinematics(rowNames, 10);
+            transition = [ ...
+                VehicleLifecycleTransition.Unchanged; ...
+                VehicleLifecycleTransition.Entered];
+            transitions = table(transition, ...
+                VariableNames="Transition", RowNames=rowNames);
+            scenario = v2xsimtest.vehicle.scenario.fixture.ScenarioStub( ...
+                initialKinematics, nextKinematics, transitions);
+
+            testCase.verifyError(@() scenario.step(1), ...
+                "v2xsim:scenario:DynamicVehicleCountNotAllowed");
+        end
+
+        function testStepRejectsMissingTransitionRowNames(testCase)
+            rowNames = ["vehicle-1", "vehicle-2"];
+            initialKinematics = testCase.createKinematics(rowNames, 0);
+            nextKinematics = testCase.createKinematics(rowNames, 10);
+            transitions = testCase.createUnchangedTransitions(rowNames);
+            transitions.Properties.RowNames = {};
+            scenario = v2xsimtest.vehicle.scenario.fixture.ScenarioStub( ...
+                initialKinematics, nextKinematics, transitions);
+
+            testCase.verifyError(@() scenario.step(1), ...
+                "v2xsim:scenario:MissingTransitionRowNames");
+        end
+
+        function testStepRejectsBackwardTime(testCase)
+            rowNames = ["vehicle-1", "vehicle-2"];
+            kinematics = testCase.createKinematics(rowNames, 0);
+            transitions = testCase.createUnchangedTransitions(rowNames);
+            scenario = v2xsimtest.vehicle.scenario.fixture.ScenarioStub( ...
+                kinematics, kinematics, transitions);
+
+            testCase.verifyError(@() scenario.step(-1), ...
+                "v2xsim:scenario:StepBackInTimeNotAllowed");
+        end
+
+        function testStepRejectsNonfiniteAndZeroDeltaTime(testCase)
+            rowNames = ["vehicle-1", "vehicle-2"];
+            kinematics = testCase.createKinematics(rowNames, 0);
+            transitions = testCase.createUnchangedTransitions(rowNames);
+            scenario = v2xsimtest.vehicle.scenario.fixture.ScenarioStub( ...
+                kinematics, kinematics, transitions);
+
+            testCase.verifyFunctionThrows(@() scenario.step(0));
+            testCase.verifyFunctionThrows(@() scenario.step(NaN));
+            testCase.verifyFunctionThrows(@() scenario.step(Inf));
+        end
+    end
+
+    methods (Access = private)
+        function kinematics = createKinematics(~, rowNames, positionOffset)
+            vehicleCount = numel(rowNames);
+            x = positionOffset + (1:vehicleCount).';
+            y = positionOffset + (101:(100 + vehicleCount)).';
+            unknown = NaN(vehicleCount, 1);
+
+            kinematics = table( ...
+                x, y, unknown, unknown, unknown, unknown, ...
+                VariableNames=["X", "Y", "vX", "vY", "aX", "aY"], ...
+                RowNames=rowNames);
+        end
+
+        function transitions = createUnchangedTransitions(~, rowNames)
+            import v2xsim.vehicle.scenario.VehicleLifecycleTransition
+
+            transition = repmat( ...
+                VehicleLifecycleTransition.Unchanged, numel(rowNames), 1);
+            transitions = table(transition, ...
+                VariableNames="Transition", RowNames=rowNames);
+        end
+
+        function verifyFunctionThrows(testCase, functionHandle)
+            didThrow = false;
+            try
+                functionHandle();
+            catch
+                didThrow = true;
+            end
+
+            testCase.verifyTrue(didThrow, ...
+                "Expected the function to throw an exception.");
+        end
+    end
+end

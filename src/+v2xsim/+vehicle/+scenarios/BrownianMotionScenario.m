@@ -1,0 +1,143 @@
+classdef BrownianMotionScenario < ...
+        v2xsim.vehicle.scenario.VelocityBasedKinematicScenario
+    %BROWNIANMOTIONSCENARIO Gas-particle motion in a square container.
+    %   Vehicles spawn at uniformly random positions and directions. Their
+    %   nonnegative speeds follow a normal distribution truncated at zero.
+    %   Between steps, vehicles move at constant velocity and reflect
+    %   elastically from the container boundaries.
+    %
+    %   The simulation area is a square with inclusive coordinate bounds
+    %   [0, SimulationAreaSize] along both the X and Y axes. Its corners are
+    %   therefore (0, 0) and (SimulationAreaSize, SimulationAreaSize).
+
+    properties (Constant)
+        CAN_STEP_BACKWARD = true
+        PROVIDES_ACCELERATION = false
+    end
+
+    properties (SetAccess = immutable)
+        SimulationAreaSize (1, 1) double
+        MeanVehicleSpeed (1, 1) double
+        VehicleSpeedStandardDeviation (1, 1) double
+    end
+
+    methods
+        function obj = BrownianMotionScenario(vehicleCount, options)
+            arguments (Input)
+                vehicleCount (1, 1) double ...
+                    {mustBeInteger, mustBePositive}
+                options.RandomStream (1, 1) RandStream = ...
+                    RandStream.getGlobalStream()
+                options.SimulationAreaSize (1, 1) double ...
+                    {mustBeReal, mustBeFinite, mustBePositive} = 1000
+                options.MeanVehicleSpeed (1, 1) double ...
+                    {mustBeReal, mustBeFinite, mustBeNonnegative} = 50
+                options.VehicleSpeedStandardDeviation (1, 1) double ...
+                    {mustBeReal, mustBeFinite, mustBeNonnegative} = 10
+            end
+
+            initialKinematics = ...
+                v2xsim.vehicle.scenarios.BrownianMotionScenario.createInitialKinematics( ...
+                    vehicleCount, ...
+                    options.RandomStream, ...
+                    options.SimulationAreaSize, ...
+                    options.MeanVehicleSpeed, ...
+                    options.VehicleSpeedStandardDeviation);
+
+            obj = obj@v2xsim.vehicle.scenario.VelocityBasedKinematicScenario( ...
+                initialKinematics);
+            obj.SimulationAreaSize = options.SimulationAreaSize;
+            obj.MeanVehicleSpeed = options.MeanVehicleSpeed;
+            obj.VehicleSpeedStandardDeviation = ...
+                options.VehicleSpeedStandardDeviation;
+        end
+    end
+
+    methods (Access = protected)
+        function [obj, vehicleKinematics] = resolvePositionConstraints( ...
+                obj, ~, vehicleKinematics, ~)
+            [vehicleKinematics.X, vehicleKinematics.vX] = ...
+                v2xsim.vehicle.scenarios.BrownianMotionScenario.reflectAtBoundaries( ...
+                    vehicleKinematics.X, ...
+                    vehicleKinematics.vX, ...
+                    obj.SimulationAreaSize);
+            [vehicleKinematics.Y, vehicleKinematics.vY] = ...
+                v2xsim.vehicle.scenarios.BrownianMotionScenario.reflectAtBoundaries( ...
+                    vehicleKinematics.Y, ...
+                    vehicleKinematics.vY, ...
+                    obj.SimulationAreaSize);
+        end
+    end
+
+    methods (Static, Access = private)
+        function vehicleKinematics = createInitialKinematics( ...
+                vehicleCount, randomStream, simulationAreaSize, ...
+                meanVehicleSpeed, vehicleSpeedStandardDeviation)
+            x = simulationAreaSize .* rand(randomStream, vehicleCount, 1);
+            y = simulationAreaSize .* rand(randomStream, vehicleCount, 1);
+            directionRadians = ...
+                2 .* pi .* rand(randomStream, vehicleCount, 1);
+            speed = ...
+                v2xsim.vehicle.scenarios.BrownianMotionScenario.sampleNonnegativeNormal( ...
+                randomStream, ...
+                vehicleCount, ...
+                meanVehicleSpeed, ...
+                vehicleSpeedStandardDeviation);
+
+            vX = speed .* cos(directionRadians);
+            vY = speed .* sin(directionRadians);
+            unknownAcceleration = NaN(vehicleCount, 1);
+            rowNames = compose("Vehicle%d", (1:vehicleCount).');
+
+            vehicleKinematics = table( ...
+                x, y, vX, vY, ...
+                unknownAcceleration, unknownAcceleration, ...
+                VariableNames=["X", "Y", "vX", "vY", "aX", "aY"], ...
+                RowNames=rowNames);
+        end
+
+        function values = sampleNonnegativeNormal( ...
+                randomStream, count, meanValue, standardDeviation)
+            if standardDeviation == 0
+                values = repmat(meanValue, count, 1);
+                return
+            end
+
+            values = meanValue + ...
+                standardDeviation .* randn(randomStream, count, 1);
+            valuesToResample = values < 0;
+            while any(valuesToResample)
+                values(valuesToResample) = meanValue + ...
+                    standardDeviation .* randn( ...
+                        randomStream, nnz(valuesToResample), 1);
+                valuesToResample = values < 0;
+            end
+        end
+
+        function [position, velocity] = reflectAtBoundaries( ...
+                position, velocity, simulationAreaSize)
+            unfoldedPosition = position;
+            reflectionPeriod = 2 .* simulationAreaSize;
+            reflectionPhase = mod(unfoldedPosition, reflectionPeriod);
+
+            position = simulationAreaSize - ...
+                abs(reflectionPhase - simulationAreaSize);
+
+            reflectionSign = ones(size(velocity));
+            reflectionSign(reflectionPhase > simulationAreaSize) = -1;
+
+            % At an exact boundary, select the physically outgoing
+            % velocity. Away from exact boundaries, the branch above is
+            % sufficient.
+            atLowerBoundary = reflectionPhase == 0;
+            reflectionSign(atLowerBoundary) = ...
+                sign(velocity(atLowerBoundary));
+
+            atUpperBoundary = reflectionPhase == simulationAreaSize;
+            reflectionSign(atUpperBoundary) = ...
+                -sign(velocity(atUpperBoundary));
+
+            velocity = velocity .* reflectionSign;
+        end
+    end
+end

@@ -12,8 +12,7 @@ The first release of this simulator is version 6.1 to remark the continuity with
 
 From version 5.4 to version 6.1 the main modification is the addition of 5G-V2X, with NR and all the related settings (including numerology). A general refactoring was performed to generalize the parameters which are common for LTE and 5G, now indicated as CV2X. Minor corrections and improvements were also performed. 
 
-NOTICE: The code runs correctly with Matlab versions from 2021b at least.
-There are problems with version 2016b and earlier. With the versions in between, some minor corrections would be required (we haven't checked all the versions).
+NOTICE: The code is meant to be written to take advantage of modern MATLAB features. It is authored in R2026a. No guarantees of whether it will work with earlier versions.
 The Statistics and Machine Learning Toolbox™ is needed for the simulation and generation of 3GPP a-periodic traffic.
 
 The main reference for the simulator is 
