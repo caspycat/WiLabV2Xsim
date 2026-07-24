@@ -82,7 +82,7 @@ outputValues = struct('computationTime',-1,...
     'blockingRateCV2X',-1*ones(1,length(phyParams.Raw)),'blockingRate11p',-1*ones(1,length(phyParams.Raw)),'blockingRateTOT',-1*ones(1,length(phyParams.Raw)),...
     'errorRateCV2X',-1*ones(1,length(phyParams.Raw)),'errorRate11p',-1*ones(1,length(phyParams.Raw)),'errorRateTOT',-1*ones(1,length(phyParams.Raw)),...
     'packetReceptionRatioCV2X',-1*ones(1,length(phyParams.Raw)),'packetReceptionRatio11p',-1*ones(1,length(phyParams.Raw)),'packetReceptionRatioTOT',-1*ones(1,length(phyParams.Raw)),...
-    'NvehiclesLTE',0,'Nvehicles11p',0,'NvehiclesTOT',0,...
+    'NUEsCV2X',0,'NUEs11p',0,'NUEsTOT',0,...
     'NneighborsCV2X',zeros(1,length(phyParams.Raw)),'Nneighbors11p',zeros(1,length(phyParams.Raw)),'NneighborsTOT',zeros(1,length(phyParams.Raw)),...
     'StDevNeighboursCV2X',zeros(1,length(phyParams.Raw)),'StDevNeighbours11p',zeros(1,length(phyParams.Raw)),'StDevNeighboursTOT',zeros(1,length(phyParams.Raw)),...
     'NreassignCV2X',0,...%%%%%
@@ -288,22 +288,22 @@ outputValues.packetReceptionRatioCV2X = sum(sum(outputValues.NcorrectlyTxBeacons
 outputValues.packetReceptionRatio11p = sum(sum(outputValues.NcorrectlyTxBeacons11p,1),1) ./ sum(sum(outputValues.NtxBeacons11p,1),1);
 outputValues.packetReceptionRatioTOT = sum(sum(outputValues.NcorrectlyTxBeaconsTOT,1),1) ./ sum(sum(outputValues.NtxBeaconsTOT,1),1);
 
-% Average number of neighbors per vehicle
-outputValues.NneighborsCV2X = outputValues.NneighborsCV2X ./ outputValues.NvehiclesLTE;
-outputValues.Nneighbors11p = outputValues.Nneighbors11p ./ outputValues.Nvehicles11p;
-outputValues.NneighborsTOT = outputValues.NneighborsTOT ./ outputValues.NvehiclesTOT;
+% Average number of neighbors per UE
+outputValues.NneighborsCV2X = outputValues.NneighborsCV2X ./ outputValues.NUEsCV2X;
+outputValues.Nneighbors11p = outputValues.Nneighbors11p ./ outputValues.NUEs11p;
+outputValues.NneighborsTOT = outputValues.NneighborsTOT ./ outputValues.NUEsTOT;
 outputValues.StDevNeighboursCV2X = outputValues.StDevNeighboursCV2X / simValues.snapshots;
 outputValues.StDevNeighbours11p = outputValues.StDevNeighbours11p / simValues.snapshots;
 outputValues.StDevNeighboursTOT = outputValues.StDevNeighboursTOT / simValues.snapshots;
 
-% Average number of vehicles in the scenario
-outputValues.AvgNvehiclesCV2X = outputValues.NvehiclesLTE / simValues.snapshots;
-outputValues.AvgNvehicles11p = outputValues.Nvehicles11p / simValues.snapshots;
-outputValues.AvgNvehiclesTOT = outputValues.NvehiclesTOT / simValues.snapshots;
+% Average number of UEs in the world
+outputValues.AvgNUEsCV2X = outputValues.NUEsCV2X / simValues.snapshots;
+outputValues.AvgNUEs11p = outputValues.NUEs11p / simValues.snapshots;
+outputValues.AvgNUEsTOT = outputValues.NUEsTOT / simValues.snapshots;
 
-% Average number of successful BR reassignment per vehicle per second
-if outputValues.AvgNvehiclesCV2X>0
-    outputValues.NreassignCV2X = (outputValues.NreassignCV2X ./ outputValues.AvgNvehiclesCV2X) / simParams.simulationTime;
+% Average number of successful BR reassignments per UE per second
+if outputValues.AvgNUEsCV2X>0
+    outputValues.NreassignCV2X = (outputValues.NreassignCV2X ./ outputValues.AvgNUEsCV2X) / simParams.simulationTime;
 else
     outputValues.NreassignCV2X = 0;
 end
@@ -364,10 +364,10 @@ outputToFiles(stationManagement,simParams,appParams,phyParams,sinrManagement,out
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Print To Video
-fprintf('\nAverage number of vehicles in the scenario = %.0f\n',outputValues.AvgNvehiclesTOT);
-if outputValues.AvgNvehiclesCV2X>0 && outputValues.AvgNvehicles11p>0
-    fprintf('Average %.0f C-V2X, ',outputValues.AvgNvehiclesCV2X);        
-    fprintf('average %.0f IEEE 802.11p\n',outputValues.AvgNvehicles11p);
+fprintf('\nAverage number of UEs in the world = %.0f\n',outputValues.AvgNUEsTOT);
+if outputValues.AvgNUEsCV2X>0 && outputValues.AvgNUEs11p>0
+    fprintf('Average %.0f C-V2X, ',outputValues.AvgNUEsCV2X);
+    fprintf('average %.0f IEEE 802.11p\n',outputValues.AvgNUEs11p);
 end
 for iPhyRaw=1:length(phyParams.Raw)
     if iPhyRaw==1
@@ -375,7 +375,7 @@ for iPhyRaw=1:length(phyParams.Raw)
     else
         fprintf('*** In the range %d-%d:\n',phyParams.Raw(iPhyRaw-1),phyParams.Raw(iPhyRaw));
     end
-    if outputValues.AvgNvehiclesCV2X>0 && outputValues.AvgNvehicles11p>0
+    if outputValues.AvgNUEsCV2X>0 && outputValues.AvgNUEs11p>0
         fprintf('LTE: average neigbors %.2f +- %.2f, ',outputValues.NneighborsCV2X(iPhyRaw),outputValues.StDevNeighboursCV2X(iPhyRaw));
         fprintf('Blocking = %.5f\tError = %.5f\tCorrect = %.5f\n',outputValues.blockingRateCV2X(iPhyRaw),outputValues.errorRateCV2X(iPhyRaw),outputValues.packetReceptionRatioCV2X(iPhyRaw));
         fprintf('11p: average neighbors %.2f +- %.2f, ',outputValues.Nneighbors11p(iPhyRaw),outputValues.StDevNeighbours11p(iPhyRaw));

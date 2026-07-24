@@ -43,7 +43,7 @@ classdef Random < v2xsim.vehicle.scenario.highway.PlacementStrategy
             positions = laneNetwork.evaluate(laneId, progress);
             x = positions(:, 1);
             y = positions(:, 2);
-            rowNames = compose("Vehicle%d", (1:obj.VehicleCount).');
+            rowNames = compose("V%d", (1:obj.VehicleCount).');
 
             vehiclePositions = table( ...
                 x, y, laneId, progress, lateralOffsetMeters, ...

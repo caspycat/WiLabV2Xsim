@@ -2,53 +2,32 @@ function [indexNewVehicles,indexOldVehicles,indexOldVehiclesToOld, ...
         IDvehicleExit,positionManagement,simValues] = updatePosition( ...
         time,IDvehicle,updateInterval,positionManagement,simValues, ...
         outParams,~)
-%UPDATEPOSITION Step the configured Scenario and update legacy matrices.
-%   Scenario vehicle identity comes from table row names. The mapping
-%   captured by initVehiclePositions keeps those identities associated with
-%   stable legacy numeric IDs even if a Scenario changes its table row
-%   order. RSUs and other legacy-managed stations are left untouched.
+%UPDATEPOSITION Step the World and project it into legacy matrices.
+%   Dense legacy indices follow World.UeIds. Traffic advances vehicles,
+%   while fixed RSU positions remain unchanged.
 
-scenario = simValues.scenario;
-if scenario.IS_VEHICLE_COUNT_DYNAMIC
+world = simValues.world;
+if world.TrafficScenario.IS_VEHICLE_COUNT_DYNAMIC
     error('v2xsim:legacy:DynamicVehicleCountUnsupported', ...
         ['The legacy simulator requires a fixed vehicle count. ', ...
         'Use a Scenario whose IS_VEHICLE_COUNT_DYNAMIC flag is false.']);
 end
 
-[scenario,~] = scenario.step(updateInterval);
-simValues.scenario = scenario;
+[world,~] = world.step(updateInterval);
+simValues.world = world;
 
-vehicleKinematics = scenario.VehicleKinematics( ...
-    simValues.scenarioVehicleRowNames,:);
-scenarioVehicleIDs = simValues.scenarioVehicleIDs;
-
-if height(vehicleKinematics)~=numel(scenarioVehicleIDs)
-    error('v2xsim:legacy:ScenarioVehicleMappingSizeMismatch', ...
-        ['The number of Scenario rows no longer matches the number of ', ...
-        'legacy vehicle IDs captured during initialization.']);
+expectedIDs = (1:numel(world.UeIds)).';
+if ~isequal(IDvehicle(:),expectedIDs)
+    error('v2xsim:legacy:InvalidDenseUeIds', ...
+        ['The legacy active IDs must be the dense indices of ', ...
+        'World.UeIds.']);
 end
 
-positionManagement.XvehicleReal(scenarioVehicleIDs) = ...
-    vehicleKinematics.X;
-positionManagement.YvehicleReal(scenarioVehicleIDs) = ...
-    vehicleKinematics.Y;
-
-speed = hypot(vehicleKinematics.vX,vehicleKinematics.vY);
-direction = complex(zeros(height(vehicleKinematics),1));
-movingVehicles = speed>0;
-direction(movingVehicles) = complex( ...
-    vehicleKinematics.vX(movingVehicles)./speed(movingVehicles), ...
-    vehicleKinematics.vY(movingVehicles)./speed(movingVehicles));
-
-positionManagement.v(scenarioVehicleIDs) = speed;
-positionManagement.direction(scenarioVehicleIDs) = direction;
-
-% Compatibility aliases used by integrations outside this checkout.
-positionManagement.XVehicle = positionManagement.XvehicleReal;
-positionManagement.YVehicle = positionManagement.YvehicleReal;
+positionManagement = v2xsim.legacy.projectWorldToPositionManagement( ...
+    world,positionManagement);
 
 % All currently supported Scenarios have a fixed vehicle set, so every
-% active station remains at the same position in the active-ID vectors.
+% UE remains at the same position in the active-ID vectors.
 indexNewVehicles = [];
 indexOldVehicles = (1:numel(IDvehicle)).';
 indexOldVehiclesToOld = indexOldVehicles;

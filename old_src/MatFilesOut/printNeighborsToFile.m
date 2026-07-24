@@ -1,5 +1,5 @@
-function printNeighborsToFile(time,positionManagement,Nvehicles,averageNeighborsRawLTE,averageNeighborsRaw11p,outParams,phyParams)
-% Print number of neighbors per vehicle at each snapshot for traffic trace
+function printNeighborsToFile(time,positionManagement,ueCount,averageNeighborsRawLTE,averageNeighborsRaw11p,outParams,phyParams)
+% Print number of neighbors per UE at each snapshot for traffic trace
 % analysis (CDF plot)
 
 filename8 = sprintf('%s/neighbors_%.0f.xls',outParams.outputFolder,outParams.simID);
@@ -12,7 +12,7 @@ for k = 1:length(phyParams.Raw)
     else
         distanceCheck = (positionManagement.distanceReal(:,:)>=phyParams.Raw(k-1) & positionManagement.distanceReal(:,:)>phyParams.Raw(k));
     end
-    avNeighborsTot = sum(sum(distanceCheck))/Nvehicles;
+    avNeighborsTot = sum(sum(distanceCheck))/ueCount;
     fprintf(fileID,'%d\t%d\t%d',averageNeighborsRawLTE(k),averageNeighborsRaw11p(k),avNeighborsTot);
     if k<length(phyParams.Raw)
         fprintf(fileID,'\t');
@@ -24,4 +24,3 @@ end
 fclose(fileID);
 
 end
-

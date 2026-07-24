@@ -12,38 +12,13 @@ if vehicleCount==0
         'The configured scenario contains no vehicles.');
 end
 
-% Keep the value object and the row-name-to-legacy-ID mapping together.
-% The mapping remains authoritative if a Scenario later reorders its rows.
-simValues.scenario = scenario;
-simValues.scenarioVehicleRowNames = ...
-    vehicleKinematics.Properties.RowNames;
-simValues.scenarioVehicleIDs = (1:vehicleCount).';
-simValues.IDvehicle = simValues.scenarioVehicleIDs;
-simValues.maxID = vehicleCount;
+world = v2xsim.World(scenario,createRsuPositions(appParams));
+simValues.world = world;
+simValues.IDvehicle = (1:numel(world.UeIds)).';
+simValues.maxID = numel(world.UeIds);
 
-positionManagement = projectKinematics( ...
-    vehicleKinematics,positionManagementForScenario(scenario));
-
-% RSUs remain legacy-managed fixed stations and are not inserted into the
-% Scenario's fixed vehicle set.
-if appParams.nRSUs>0
-    idRSUs = simValues.maxID+1:simValues.maxID+appParams.nRSUs;
-    simValues.maxID = simValues.maxID + appParams.nRSUs;
-    simValues.IDvehicle = [simValues.IDvehicle; idRSUs.'];
-    positionManagement.XvehicleReal = [ ...
-        positionManagement.XvehicleReal; appParams.RSU_xLocation.'];
-    positionManagement.YvehicleReal = [ ...
-        positionManagement.YvehicleReal; appParams.RSU_yLocation.'];
-    positionManagement.v = [ ...
-        positionManagement.v; zeros(appParams.nRSUs,1)];
-    positionManagement.direction = [ ...
-        positionManagement.direction; zeros(appParams.nRSUs,1)];
-end
-
-% Compatibility aliases used by integrations outside this checkout. The
-% WiLabV2Xsim sources themselves use XvehicleReal and YvehicleReal.
-positionManagement.XVehicle = positionManagement.XvehicleReal;
-positionManagement.YVehicle = positionManagement.YvehicleReal;
+positionManagement = v2xsim.legacy.projectWorldToPositionManagement( ...
+    world,positionManagementForScenario(scenario));
 
 if isfield(simParams,'positionErrorChain')
     simValues.positionErrorChain = simParams.positionErrorChain;
@@ -64,14 +39,41 @@ simValues = applyPositionErrorChain(simParams,simValues,0);
 % Legacy asynchronous-transmitter selection is independent of mobility.
 if simParams.technology==constants.TECH_ONLY_CV2X && ...
         simParams.BRAlgorithm==constants.REASSIGN_BR_STD_MODE_4 && ...
-        simParams.asynMode==1
+    simParams.asynMode==1
     asynchronousVehicleCount = ...
         ceil(vehicleCount*simParams.percAsynUser);
-    randomizedVehicleIDs = simValues.scenarioVehicleIDs( ...
-        randperm(vehicleCount));
+    [hasVehicleId,vehicleUeIDs] = ...
+        ismember(world.VehicleIds,world.UeIds);
+    if ~all(hasVehicleId)
+        error('v2xsim:legacy:InvalidWorldIdentity', ...
+            'Every World.VehicleId must occur in World.UeIds.');
+    end
+    randomizedVehicleIDs = vehicleUeIDs(randperm(vehicleCount));
+    randomizedVehicleIDs = randomizedVehicleIDs(:);
     simParams.IDvehicleAsyn = sort( ...
         randomizedVehicleIDs(1:asynchronousVehicleCount));
 end
+end
+
+function rsuPositions = createRsuPositions(appParams)
+if appParams.nRSUs==0
+    rsuPositions = table( ...
+        zeros(0,1),zeros(0,1), ...
+        VariableNames=["X","Y"]);
+    return
+end
+
+x = double(appParams.RSU_xLocation(:));
+y = double(appParams.RSU_yLocation(:));
+if numel(x)~=appParams.nRSUs || numel(y)~=appParams.nRSUs
+    error('v2xsim:legacy:InvalidRsuPositionCount', ...
+        ['nRSUs must equal the number of configured RSU X and Y ', ...
+        'coordinates.']);
+end
+
+rsuIds = compose("RSU%d",(1:appParams.nRSUs).');
+rsuPositions = table( ...
+    x,y,VariableNames=["X","Y"],RowNames=cellstr(rsuIds));
 end
 
 function scenario = createScenario(typeOfScenario,scenarioOptions)
@@ -160,20 +162,4 @@ end
 
 error('v2xsim:legacy:UnsupportedScenarioGeometry', ...
     'No legacy bounds projection exists for class %s.',class(scenario));
-end
-
-function positionManagement = projectKinematics( ...
-        vehicleKinematics,positionManagement)
-positionManagement.XvehicleReal = vehicleKinematics.X;
-positionManagement.YvehicleReal = vehicleKinematics.Y;
-
-speed = hypot(vehicleKinematics.vX,vehicleKinematics.vY);
-direction = complex(zeros(height(vehicleKinematics),1));
-movingVehicles = speed>0;
-direction(movingVehicles) = complex( ...
-    vehicleKinematics.vX(movingVehicles)./speed(movingVehicles), ...
-    vehicleKinematics.vY(movingVehicles)./speed(movingVehicles));
-
-positionManagement.v = speed;
-positionManagement.direction = direction;
 end

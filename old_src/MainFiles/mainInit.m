@@ -7,6 +7,16 @@ function [appParams,simParams,phyParams,outParams,simValues,outputValues,...
 stationManagement.activeIDs = simValues.IDvehicle;
 simValues = rmfield(simValues,'IDvehicle');
 
+% Resolve the World RSU identities to the dense numeric UE indices used by
+% the legacy station-management arrays. RSUs are not required to occupy a
+% particular suffix of the UE ordering.
+[isRsuMapped,rsuUeIndices] = ismember( ...
+    simValues.world.RsuIds,simValues.world.UeIds);
+assert(all(isRsuMapped), ...
+    'Every World RSU ID must be present in World UeIds.');
+assert(numel(rsuUeIndices)==appParams.nRSUs, ...
+    'appParams.nRSUs must match the number of RSUs in the World.');
+
 % The simulation starts at time '0'
 timeManagement.timeNow = 0;
 
@@ -42,9 +52,9 @@ end
 % RSUs technology set
 if appParams.nRSUs>0
     if strcmpi(appParams.RSU_technology,'11p')
-        stationManagement.vehicleState(end-appParams.nRSUs+1:end) = constants.V_STATE_11P_IDLE;
+        stationManagement.vehicleState(rsuUeIndices) = constants.V_STATE_11P_IDLE;
     elseif strcmpi(appParams.RSU_technology,'LTE')
-        stationManagement.vehicleState(end-appParams.nRSUs+1:end) = constants.V_STATE_LTE_TXRX;
+        stationManagement.vehicleState(rsuUeIndices) = constants.V_STATE_LTE_TXRX;
     end
 end
 
@@ -63,11 +73,13 @@ for i=1:length(stationManagement.activeIDs11p)
     stationManagement.indexInActiveIDs_of11pnodes(i) = find(stationManagement.activeIDs==stationManagement.activeIDs11p(i));
 end
 
-%% Number of vehicles at the current time
-outputValues.Nvehicles = length(stationManagement.activeIDs);
-outputValues.NvehiclesTOT = outputValues.NvehiclesTOT + outputValues.Nvehicles;
-outputValues.NvehiclesLTE = outputValues.NvehiclesLTE + length(stationManagement.activeIDsCV2X);
-outputValues.Nvehicles11p = outputValues.Nvehicles11p + length(stationManagement.activeIDs11p);
+%% Number of UEs at the current time
+outputValues.NUEs = length(stationManagement.activeIDs);
+outputValues.NUEsTOT = outputValues.NUEsTOT + outputValues.NUEs;
+outputValues.NUEsCV2X = outputValues.NUEsCV2X + ...
+    length(stationManagement.activeIDsCV2X);
+outputValues.NUEs11p = outputValues.NUEs11p + ...
+    length(stationManagement.activeIDs11p);
 
 %% Initialization of packets management 
 % Number of packets in the queue of each node
@@ -77,7 +89,7 @@ stationManagement.pckBuffer = zeros(simValues.maxID,1);
 % 2 = DENM
 stationManagement.pckType = constants.PACKET_TYPE_CAM * ones(simValues.maxID,1);
 if appParams.nRSUs>0 && ~strcmpi(appParams.RSU_pckTypeString,'CAM')
-    stationManagement.pckType(end-appParams.nRSUs+1:end) = constants.PACKET_TYPE_DENM;
+    stationManagement.pckType(rsuUeIndices) = constants.PACKET_TYPE_DENM;
 end
 % From v 5.4.14 the following are needed for multiple transmissions 
 % 'pckReceived' registers if the current packet has already been received
@@ -127,7 +139,7 @@ timeManagement.addedToGenerationTime = zeros(simValues.maxID,1);
 
 % From v5.2.5: RSU DENM and hpDENM are sent at fixed 20 Hz
 if appParams.nRSUs>0 && ~strcmpi(appParams.RSU_pckTypeString,'CAM')
-    timeManagement.generationIntervalDeterministicPart(end-appParams.nRSUs+1:end) = 0.05;
+    timeManagement.generationIntervalDeterministicPart(rsuUeIndices) = 0.05;
 end
 %timeManagement.generationIntervalDeterministicPart(stationManagement.activeIDsCV2X) = appParams.averageTbeacon;
 timeManagement.timeNextPacket = Inf * ones(simValues.maxID,1);
@@ -227,7 +239,7 @@ positionManagement.angleOld = zeros(length(positionManagement.XvehicleRealOld),1
 
 % Computation of the channel gain
 % 'dUpdate': vector used for the calculation of correlated shadowing
-dUpdate = zeros(outputValues.Nvehicles,outputValues.Nvehicles);
+dUpdate = zeros(outputValues.NUEs,outputValues.NUEs);
 [sinrManagement,simValues.Xmap,simValues.Ymap,phyParams.LOS] = computeChannelGain(sinrManagement,stationManagement,positionManagement,phyParams,simParams,dUpdate);
 
 % Update of the neighbors
@@ -312,12 +324,12 @@ if sum(stationManagement.vehicleState(stationManagement.activeIDs)~=constants.V_
     if appParams.nRSUs>0 && ~strcmpi(appParams.RSU_pckTypeString,'CAM')
         if strcmpi(appParams.RSU_pckTypeString,'hpDENM')
             % High priority DENM: CWmax=3, AIFS=58us
-            stationManagement.CW_11p(end-appParams.nRSUs+1:end) = 3;
-            stationManagement.tAifs_11p(end-appParams.nRSUs+1:end) = 58e-6;
+            stationManagement.CW_11p(rsuUeIndices) = 3;
+            stationManagement.tAifs_11p(rsuUeIndices) = 58e-6;
         elseif strcmpi(appParams.RSU_pckTypeString,'DENM')
             % DENM: CWmax=7, AIFS=71us
-            stationManagement.CW_11p(end-appParams.nRSUs+1:end) = 7;
-            stationManagement.tAifs_11p(end-appParams.nRSUs+1:end) = 71e-6;
+            stationManagement.CW_11p(rsuUeIndices) = 7;
+            stationManagement.tAifs_11p(rsuUeIndices) = 71e-6;
         else
             error('Something wrong with the packet type of RSUs');
         end
